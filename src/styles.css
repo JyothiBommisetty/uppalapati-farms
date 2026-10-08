@@ -287,6 +287,52 @@ body.is-ready .loading-screen {
   will-change: transform;
 }
 
+.journey__canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .journey__stage {
+    height: 100lvh;
+    background-image: none;
+  }
+  .journey__video {
+    display: block !important;
+    object-fit: cover;
+    object-position: center;
+    filter: none !important;
+  }
+  .journey__canvas {
+    display: none;
+  }
+}
+
+body.use-canvas .journey__video {
+  display: none !important;
+}
+
+body.use-canvas .journey__canvas {
+  display: block !important;
+  filter: none !important;
+}
+
+.no-fx .journey__canvas,
+.no-fx .journey__stage,
+.no-fx .journey__caption,
+.no-fx .journey__captions {
+  filter: none !important;
+  backdrop-filter: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
 @media (max-width: 768px) {
   .journey__video {
     object-position: 50% 30%;

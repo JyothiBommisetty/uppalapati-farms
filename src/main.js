@@ -54,6 +54,24 @@ const filmSources = [
 // Phones stay on the light encode regardless of pixel density - a 720p file
 // in a ~390px-wide slot is already oversampled.
 const PHONE_WIDTH = 768;
+const isMobilePortrait = window.matchMedia('(max-width: 768px) and (orientation: portrait)').matches;
+const urlParams = new URLSearchParams(window.location.search);
+const isNoJar = urlParams.get('nojar') === '1';
+const isNoFx = urlParams.get('nofx') === '1';
+const isUseCanvas = urlParams.get('canvas') === '1';
+
+if (isNoFx) {
+  document.body.classList.add('no-fx');
+}
+
+window.__desktopLoopCount = 0;
+
+if (isMobilePortrait && isUseCanvas) {
+  document.body.classList.add('use-canvas');
+  processVideo?.removeAttribute('src');
+  processVideo?.removeAttribute('preload');
+  import('./mobile-journey.js').then((m) => m.initMobileJourney());
+}
 // Direct seek mode - no thresholding used
 
 let scrollFrame = 0;
@@ -158,8 +176,12 @@ function preloadAssets() {
   const settleVideo = () => {
     if (processVideo.readyState >= 2) settle();
   };
-  processVideo.addEventListener('loadeddata', settleVideo, { once: true });
-  processVideo.addEventListener('error', settle, { once: true });
+  if (!isMobilePortrait) {
+    processVideo.addEventListener('loadeddata', settleVideo, { once: true });
+    processVideo.addEventListener('error', settle, { once: true });
+  } else {
+    settle();
+  }
   window.setTimeout(settle, 7000);
 
   if (document.readyState === 'loading') {
@@ -177,6 +199,7 @@ function preloadAssets() {
 /* ---------- Journey: intro overlay + scrubbed film ---------- */
 
 function updateJourney() {
+  if (isMobilePortrait && isUseCanvas) return;
   const rect = journeyStage.getBoundingClientRect();
   const isNearViewport = rect.bottom > 0 && rect.top < window.innerHeight;
   if (!isNearViewport || isReducedMotion) {
@@ -251,12 +274,13 @@ const jar3d = jarCanvas
    busy for the first few seconds. The cap makes the start predictable without
    putting 16 MiB in front of the first paint. */
 if (jar3d) {
-  const beginJar3dLoad = () => jar3d.start();
+  const beginJar3dLoad = () => {
+    if (isNoJar) return;
+    jar3d.start();
+  };
   if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(beginJar3dLoad, { timeout: 2000 });
   } else {
-    // Safari only gained requestIdleCallback in 16.4, and a jar that never
-    // loads is worse than one that loads a moment late.
     window.setTimeout(beginJar3dLoad, 1);
   }
 }
@@ -315,8 +339,14 @@ function updateRevealLabels() {
 /* ---------- Frame loop: 1:1 scroll-locked video seeking ---------- */
 
 function syncScroll() {
-  updateJourney();
-  updateProductStage();
+  if (!isMobilePortrait) {
+    updateJourney();
+  }
+  const rect = productStage.getBoundingClientRect();
+  const stageNear = rect.bottom > -window.innerHeight * 0.5 && rect.top < window.innerHeight * 1.5;
+  if (!isMobilePortrait || stageNear) {
+    updateProductStage();
+  }
 }
 
 function frame(now) {
@@ -343,8 +373,15 @@ function frame(now) {
   }
   // The jar renders from the page's existing animation frame rather than a
   // loop of its own, so a turning jar does not double the per-frame cost.
-  jar3d?.tick(now);
-  updateRevealLabels();
+  const journeyRect = journeyStage?.getBoundingClientRect();
+  const journeyOnScreen = journeyRect && journeyRect.bottom > 0 && journeyRect.top < window.innerHeight;
+  if (!isMobilePortrait || !journeyOnScreen) {
+    window.__desktopLoopCount++;
+    if (!isNoJar) {
+      jar3d?.tick(now);
+    }
+    updateRevealLabels();
+  }
   window.requestAnimationFrame(frame);
 }
 
@@ -370,6 +407,11 @@ function setVideoSource(source) {
 }
 
 function selectVideoSource() {
+  if (isMobilePortrait) {
+    if (isUseCanvas) return;
+    setVideoSource('/media/film-mobile-916.mp4');
+    return;
+  }
   // Use lighter encode on phones/tablets to reduce GPU/decoder load.
   setVideoSource(filmSources[0].src);
 }
